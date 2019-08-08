@@ -74,25 +74,32 @@ class Blockchain(object):
     def last_block(self):
         return self.chain[-1]
 
-    def proof_of_work(self, last_proof):
+    def proof_of_work(self):
         """
         Simple Proof of Work Algorithm
         Find a number p such that hash(last_block_string, p) contains 6 leading
         zeroes
         """
 
-        pass
+        block_string = json.dumps(self.last_block, sort_keys=True).encode()
+        proof = 0
+        while not self.valid_proof(block_string, proof):
+            proof += 1
+        return proof
 
     @staticmethod
-    def valid_proof(last_proof, proof):
+    def valid_proof(block_string, proof):
         """
         Validates the Proof:  Does hash(block_string, proof) contain 6
         leading zeroes?
         """
-        # TODO
-        pass
+        guess = f'{block_string}{proof}'.encode()
+        guess_hash = hashlib.sha256(guess).hexdigest()
+        # TODO: CHANGE BACK TO SIX!!!!!!
+        return guess_hash[:6] == '000000'
 
     def valid_chain(self, chain):
+        #TODO: check invalid chain
         """
         Determine if a given blockchain is valid
 
@@ -100,21 +107,28 @@ class Blockchain(object):
         :return: <bool> True if valid, False if not
         """
 
-        last_block = chain[0]
+        previous_block = chain[0]
         current_index = 1
 
         while current_index < len(chain):
             block = chain[current_index]
-            print(f'{last_block}')
+            print(f'{previous_block}')
             print(f'{block}')
             print("\n-------------------\n")
             # Check that the hash of the block is correct
             # TODO: Return false if hash isn't correct
-
+            if block['previous_hash'] != self.hash(previous_block):
+                previous_hash = block['previous_hash']
+                self_hash = self.hash(previous_block)
+                print(f'Comparing hashes:{previous_hash}:{self_hash}')
+                return False
             # Check that the Proof of Work is correct
             # TODO: Return false if proof isn't correct
-
-            last_block = block
+            block_string = json.dumps(previous_block, sort_keys=True).encode()
+            if not self.valid_proof(block_string, block['proof']):
+                print('Found valid proof')
+                return False    
+            previous_block = block
             current_index += 1
 
         return True
@@ -134,13 +148,14 @@ blockchain = Blockchain()
 def mine():
     # We run the proof of work algorithm to get the next proof...
     proof = blockchain.proof_of_work()
-
+    print(f'found valid proof {proof}')
     # We must receive a reward for finding the proof.
-    # TODO:
+    blockchain.new_transaction(0, node_identifier, 1)
     # The sender is "0" to signify that this node has mine a new coin
     # The recipient is the current node, it did the mining!
     # The amount is 1 coin as a reward for mining the next block
-
+    last_block_hash = blockchain.hash(blockchain.last_block)
+    block = blockchain.new_block(proof, last_block_hash)
     # Forge the new Block by adding it to the chain
     # TODO
 
@@ -177,9 +192,17 @@ def new_transaction():
 def full_chain():
     response = {
         # TODO: Return the chain and its current length
+        'chain': blockchain.chain,
+        'length': len(blockchain.chain)
     }
     return jsonify(response), 200
 
+@app.route('/chain_validity', methods=['GET'])
+def chain_validity():
+    response = {
+        'valid_chain': blockchain.valid_chain(blockchain.chain)
+    }
+    return jsonify(response), 200
 
 # Run the program on port 5000
 if __name__ == '__main__':
