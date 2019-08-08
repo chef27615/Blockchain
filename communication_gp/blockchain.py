@@ -1,16 +1,14 @@
-# Paste your version of blockchain.py from the client_mining_p
-# folder here
 # In shell run: FLASK_APP=blockchain.py FLASK_DEBUG=1 python -m flask run
 # Thanks Daniel!
 
 import hashlib
 import json
+
+from urllib.parse import urlparse
 from time import time
 from uuid import uuid4
 
 from flask import Flask, jsonify, request
-
-from urllib.parse import urlparse
 
 class Blockchain(object):
     def __init__(self):
@@ -22,7 +20,7 @@ class Blockchain(object):
 
         if len(self.chain) == 0:
             self.create_genesis_block()
-            
+
     def create_genesis_block(self):
         """
             create the first block and put in the chain
@@ -162,8 +160,8 @@ class Blockchain(object):
 
         parsed_url = urlparse(address)
         self.nodes.add(parsed_url.netloc)
-    
-    def broadcast_block(self, new_block):
+
+    def broadcast_new_block(self, new_block):
 
         neighbors = self.nodes
         post_data = {"block": block}
@@ -171,9 +169,10 @@ class Blockchain(object):
         for node in neighbors:
             r = request.post(f'http://{node}/block/new', json=post_data)
 
-            if response.status_code != 200:
-                #handle error
+            if responses.status_code != 200:
+                # error handling
                 pass
+
 
 # Instantiate our Node
 app = Flask(__name__)
@@ -270,55 +269,52 @@ def last_block():
 
 @app.route('/nodes/register', methods=['POST'])
 def register_nodes():
-    value = request.get_json()
-    nodes = value['nodes']
+    values = request.get_json()
+    nodes = values['nodes']
 
     if nodes is None:
         return "Error: please supply a valid list of nodes", 400
-
     for node in nodes:
         blockchain.register_node(node)
 
     response = {
-        'message':"new nodes have been added",
-        'total_nodes':"list{blockchain.nodes}"
+        'message':"New nodes have been added",
+        'total_nodes': list(blockchain.nodes)
     }
     return jsonify(response), 200
-
-
 @app.route('/block/new', methods=['POST'])
 def receive_block():
     values = request.get_json()
-    # validate this is actually a peer in the network
-    # check index of the block and make sure it is one greater than the last one
+    # validate that this is actually a peer in the network
+    # check index of the block and make sure it is one greater than our last
 
     new_block = values['block']
     old_block = blockchain.last_block
-    
+
     if new_block['index'] == old_block['index'] + 1:
         # index is right
         if new_block['previous_hash'] == blockchain.hash(old_block):
-            # check the hash is correct
+            # this is the right block with the right hash
             block_string = json.dumps(old_block, sort_keys=True).encode()
             if blockchain.valid_proof(block_string, new_block['proof']):
-                # proof is good
-                print('New block accepted')
+                # proof is valid
+                print("New block accepted")
                 blockchain.add(new_block)
                 return "Block accepted", 200
             else:
-                # bad proof
+                # bad proof , handle case and response
                 pass
         else:
-            # hashes don't match
+            # hashes don't match, response
             pass
     else:
-        # index more than one greater
-        # block maybe invalid or we are behind
-        # ask all of the nodes in our network for their chains
-        # check their length and replace ours with the longest and valid chain
+        # Index is more than one greater
+        # block maybe invalid or we maybe behind
+        # do consensus process
+        # Ask all of the nodes in our network for their chains
+        # check the lengths and replace ours with the longest valid chain
         pass
 
 # Run the program on port 5000
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
-
